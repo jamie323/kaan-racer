@@ -28,61 +28,62 @@ let targetX=car.x,keys={},marks=[],obstacles=[],particles=[],obTimer=0;
 for(let i=0;i<8;i++)marks.push({y:i*90});
 
 // ---- AUDIO ----
-const AC=new (window.AudioContext||window.webkitAudioContext)();
+let AC=null;
+function getAC(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();}return AC;}
 let engineOsc=null,engineGain=null;
 
 function startEngine(){
   if(engineOsc)return;
-  engineOsc=AC.createOscillator();
-  engineGain=AC.createGain();
-  const dist=AC.createWaveShaper();
+  engineOsc=getAC().createOscillator();
+  engineGain=getAC().createGain();
+  const dist=getAC().createWaveShaper();
   const curve=new Float32Array(256);
   for(let i=0;i<256;i++){const x=i*2/256-1;curve[i]=x*(Math.abs(x)+0.3)/(x*x+0.3+1);}
   dist.curve=curve;
   engineOsc.type='sawtooth';
   engineOsc.frequency.value=80;
   engineGain.gain.value=0.08;
-  engineOsc.connect(dist);dist.connect(engineGain);engineGain.connect(AC.destination);
+  engineOsc.connect(dist);dist.connect(engineGain);engineGain.connect(getAC().destination);
   engineOsc.start();
 }
 
 function stopEngine(){
   if(!engineOsc)return;
-  engineGain.gain.setTargetAtTime(0,AC.currentTime,0.1);
+  engineGain.gain.setTargetAtTime(0,getAC().currentTime,0.1);
   setTimeout(()=>{try{engineOsc.stop();engineOsc=null;}catch(e){}},300);
 }
 
 function updateEngine(spd){
   if(!engineOsc)return;
   const freq=70+spd*18;
-  engineOsc.frequency.setTargetAtTime(freq,AC.currentTime,0.1);
+  engineOsc.frequency.setTargetAtTime(freq,getAC().currentTime,0.1);
 }
 
 function playCrash(){
-  const buf=AC.createBuffer(1,AC.sampleRate*0.6,AC.sampleRate);
+  const buf=AC.createBuffer(1,getAC().sampleRate*0.6,getAC().sampleRate);
   const d=buf.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,0.4);
-  const src=AC.createBufferSource(),g=AC.createGain();
-  const filt=AC.createBiquadFilter();filt.type='lowpass';filt.frequency.value=800;
+  const src=getAC().createBufferSource(),g=getAC().createGain();
+  const filt=getAC().createBiquadFilter();filt.type='lowpass';filt.frequency.value=800;
   src.buffer=buf;g.gain.value=1.2;
-  src.connect(filt);filt.connect(g);g.connect(AC.destination);
+  src.connect(filt);filt.connect(g);g.connect(getAC().destination);
   src.start();
 }
 
 function playBeep(freq,dur,vol){
-  const o=AC.createOscillator(),g=AC.createGain();
+  const o=getAC().createOscillator(),g=getAC().createGain();
   o.frequency.value=freq;o.type='square';
-  g.gain.setValueAtTime(vol||0.15,AC.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);
-  o.connect(g);g.connect(AC.destination);
-  o.start();o.stop(AC.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.15,getAC().currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,getAC().currentTime+dur);
+  o.connect(g);g.connect(getAC().destination);
+  o.start();o.stop(getAC().currentTime+dur);
 }
 
 function playNearMiss(){playBeep(300,0.08,0.1);}
 
 function playWelcome(){
   const el=document.getElementById('welcomeAudio');
-  if(el){AC.resume();el.volume=1;el.currentTime=0;el.play().catch(()=>{});}
+  if(el){getAC().resume();el.volume=1;el.currentTime=0;el.play().catch(()=>{});}
 }
 
 function playStartJingle(){
@@ -150,7 +151,7 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('keyup',e=>keys[e.code]=false);
 let tX=0;
-c.addEventListener('touchstart',e=>{tX=e.touches[0].clientX;AC.resume();});
+c.addEventListener('touchstart',e=>{tX=e.touches[0].clientX;getAC().resume();});
 c.addEventListener('touchend',e=>{
   const dx=e.changedTouches[0].clientX-tX;
   if(state!=='playing'){startGame();return;}
@@ -160,7 +161,7 @@ c.addEventListener('touchend',e=>{
 
 let welcomePlayed=false;
 function startGame(){
-  AC.resume();
+  getAC().resume();
   state='playing';score=0;speed=4;frame=0;obstacles=[];particles=[];obTimer=0;
   car.lane=1;car.x=W/2;targetX=W/2;
   document.getElementById('msg').textContent='← → to steer';
