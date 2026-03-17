@@ -28,39 +28,8 @@ let targetX=car.x,keys={},marks=[],obstacles=[],particles=[],obTimer=0;
 for(let i=0;i<8;i++)marks.push({y:i*90});
 
 // ---- AUDIO ----
-let AC=null;
-function getAC(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();}return AC;}
-let engineOsc=null,engineGain=null;
-
-function startEngine(){
-  if(engineOsc)return;
-  engineOsc=getAC().createOscillator();
-  engineGain=getAC().createGain();
-  const dist=getAC().createWaveShaper();
-  const curve=new Float32Array(256);
-  for(let i=0;i<256;i++){const x=i*2/256-1;curve[i]=x*(Math.abs(x)+0.3)/(x*x+0.3+1);}
-  dist.curve=curve;
-  engineOsc.type='sawtooth';
-  engineOsc.frequency.value=80;
-  engineGain.gain.value=0.4;
-  engineOsc.connect(dist);dist.connect(engineGain);engineGain.connect(getAC().destination);
-  engineOsc.start();
-}
-
-function stopEngine(){
-  if(!engineOsc)return;
-  engineGain.gain.setTargetAtTime(0,getAC().currentTime,0.1);
-  setTimeout(()=>{try{engineOsc.stop();engineOsc=null;}catch(e){}},300);
-}
-
-function updateEngine(spd){
-  if(!engineOsc)return;
-  const freq=70+spd*18;
-  engineOsc.frequency.setTargetAtTime(freq,getAC().currentTime,0.1);
-}
-
 function playCrash(){
-  const buf=AC.createBuffer(1,getAC().sampleRate*0.6,getAC().sampleRate);
+  const buf=getAC().createBuffer(1,getAC().sampleRate*0.6,getAC().sampleRate);
   const d=buf.getChannelData(0);
   for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,0.4);
   const src=getAC().createBufferSource(),g=getAC().createGain();
@@ -79,15 +48,26 @@ function playBeep(freq,dur,vol){
   o.start();o.stop(getAC().currentTime+dur);
 }
 
+function playSqueal(){
+  const o=getAC().createOscillator(),g=getAC().createGain();
+  o.type='sine';
+  o.frequency.setValueAtTime(900,getAC().currentTime);
+  o.frequency.exponentialRampToValueAtTime(400,getAC().currentTime+0.15);
+  g.gain.setValueAtTime(0.2,getAC().currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,getAC().currentTime+0.15);
+  o.connect(g);g.connect(getAC().destination);
+  o.start();o.stop(getAC().currentTime+0.15);
+}
+
 function playNearMiss(){playBeep(300,0.08,0.25);}
+
+function playStartJingle(){
+  [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playBeep(f,0.15,0.5),i*120));
+}
 
 function playWelcome(){
   const el=document.getElementById('welcomeAudio');
   if(el){getAC().resume();el.volume=1;el.currentTime=0;el.play().catch(()=>{});}
-}
-
-function playStartJingle(){
-  [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playBeep(f,0.15,0.5),i*120));
 }
 
 // ---- DRAW LAMBO ----
@@ -165,7 +145,7 @@ function startGame(){
   state='playing';score=0;speed=4;frame=0;obstacles=[];particles=[];obTimer=0;
   car.lane=1;car.x=W/2;targetX=W/2;
   document.getElementById('msg').textContent='← → to steer';
-  startEngine();
+  
   playStartJingle();
   if(!welcomePlayed){welcomePlayed=true;setTimeout(()=>playWelcome(),600);}
 }
@@ -179,12 +159,12 @@ function loop(){
 
   if(state==='playing'){
     frame++;score++;
-    speed=4+Math.floor(score/300)*0.5;
-    updateEngine(speed);
+    speed=4+Math.floor(score/150)*0.6;
+    
     document.getElementById('score').textContent='SCORE: '+score;
     marks.forEach(m=>{m.y+=speed;if(m.y>H+90)m.y-=8*90;});
-    if(keys['ArrowLeft']){car.lane=Math.max(0,car.lane-0.06);targetX=RL+car.lane*LW+LW/2;}
-    if(keys['ArrowRight']){car.lane=Math.min(2,car.lane+0.06);targetX=RL+car.lane*LW+LW/2;}
+    if(keys['ArrowLeft']){car.lane=Math.max(0,car.lane-0.06);targetX=RL+car.lane*LW+LW/2;if(frame%8===0)playSqueal();}
+    if(keys['ArrowRight']){car.lane=Math.min(2,car.lane+0.06);targetX=RL+car.lane*LW+LW/2;if(frame%8===0)playSqueal();}
     car.x+=(targetX-car.x)*0.15;
     obTimer++;
     if(obTimer>Math.max(40,90-Math.floor(score/200)*5)){spawnOb();obTimer=0;}
@@ -201,7 +181,7 @@ function loop(){
     obstacles.forEach(o=>{
       if(collides(car,o)){
         spawnParticles(car.x,car.y);
-        playCrash();stopEngine();
+        playCrash();
         state='dead';
         document.getElementById('msg').textContent='GAME OVER! SPACE to retry';
       }
