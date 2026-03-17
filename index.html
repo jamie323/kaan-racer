@@ -355,7 +355,7 @@ function loop() {
 
   if (state === 'play') {
     fr++; score++;
-    spd = 4 + Math.floor(score / 120) * 0.7; // gets fast quickly
+    spd = 4 + Math.floor(score / 500) * 0.3; // gentle ramp, max ~7 after 5000 points
     document.getElementById('score').textContent = 'SCORE: ' + score;
 
     // scroll marks
@@ -371,7 +371,7 @@ function loop() {
 
     // spawn obstacles
     obT++;
-    const gap = Math.max(35, 85 - Math.floor(score/150)*6);
+    const gap = Math.max(60, 100 - Math.floor(score/400)*5);
     if (obT > gap) { spawnOb(); obT = 0; }
 
     // move obstacles
