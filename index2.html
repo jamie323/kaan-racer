@@ -93,56 +93,122 @@ function playVoice() {
   el.play().catch(() => {});
 }
 
-// ---- Draw car ----
+// ---- Draw Lamborghini-style car ----
 function drawCar(x, y, w, h, player) {
   cx.save(); cx.translate(x, y);
-  const body = player ? '#0ea5e9' : '#dc2626';
-  const roof = player ? '#0369a1' : '#991b1b';
+  const body  = player ? '#0ea5e9' : '#dc2626';
+  const dark  = player ? '#0369a1' : '#991b1b';
+  const light = player ? '#38bdf8' : '#f87171';
+
+  const hw = w/2, hh = h/2;
 
   // shadow
-  cx.fillStyle = 'rgba(0,0,0,0.2)';
-  cx.beginPath(); cx.ellipse(0, h/2-3, w*0.42, 8, 0, 0, Math.PI*2); cx.fill();
+  cx.fillStyle = 'rgba(0,0,0,0.25)';
+  cx.beginPath(); cx.ellipse(0, hh-2, hw*0.85, 7, 0, 0, Math.PI*2); cx.fill();
 
-  // body
+  // === MAIN BODY — angular Lambo shape ===
   cx.fillStyle = body;
-  cx.beginPath(); cx.roundRect(-w/2, -h/2, w, h, [5,5,7,7]); cx.fill();
+  cx.beginPath();
+  cx.moveTo(-hw+8,  -hh);        // front-left
+  cx.lineTo( hw-8,  -hh);        // front-right
+  cx.lineTo( hw,    -hh+10);     // nose flare right
+  cx.lineTo( hw+4,  -hh+h*0.28); // wide mid right
+  cx.lineTo( hw+2,   hh-10);     // rear shoulder right
+  cx.lineTo( hw-6,   hh);        // rear-right
+  cx.lineTo(-hw+6,   hh);        // rear-left
+  cx.lineTo(-hw-2,   hh-10);     // rear shoulder left
+  cx.lineTo(-hw-4,  -hh+h*0.28); // wide mid left
+  cx.lineTo(-hw,    -hh+10);     // nose flare left
+  cx.closePath(); cx.fill();
 
-  // roof
-  cx.fillStyle = roof;
-  cx.beginPath(); cx.roundRect(-w/2+7, -h/2+2, w-14, h*0.4, [4,4,2,2]); cx.fill();
+  // body highlight stripe
+  cx.fillStyle = light;
+  cx.globalAlpha = 0.18;
+  cx.beginPath();
+  cx.moveTo(-hw*0.5, -hh+2);
+  cx.lineTo( hw*0.5, -hh+2);
+  cx.lineTo( hw*0.6, -hh+h*0.35);
+  cx.lineTo(-hw*0.6, -hh+h*0.35);
+  cx.closePath(); cx.fill();
+  cx.globalAlpha = 1;
 
-  // windscreen
-  cx.fillStyle = 'rgba(160,230,255,0.55)';
-  cx.beginPath(); cx.roundRect(-w/2+11, -h/2+6, w-22, h*0.2, 3); cx.fill();
+  // === LOW ANGULAR CABIN ===
+  cx.fillStyle = dark;
+  cx.beginPath();
+  cx.moveTo(-hw*0.55, -hh+h*0.1);   // cabin front-left
+  cx.lineTo( hw*0.55, -hh+h*0.1);   // cabin front-right
+  cx.lineTo( hw*0.45, -hh+h*0.42);  // cabin rear-right
+  cx.lineTo(-hw*0.45, -hh+h*0.42);  // cabin rear-left
+  cx.closePath(); cx.fill();
+
+  // === WINDSCREEN — angled ===
+  cx.fillStyle = 'rgba(180,240,255,0.6)';
+  cx.beginPath();
+  cx.moveTo(-hw*0.48, -hh+h*0.11);
+  cx.lineTo( hw*0.48, -hh+h*0.11);
+  cx.lineTo( hw*0.38, -hh+h*0.28);
+  cx.lineTo(-hw*0.38, -hh+h*0.28);
+  cx.closePath(); cx.fill();
 
   // rear window
-  cx.fillStyle = 'rgba(160,230,255,0.4)';
-  cx.beginPath(); cx.roundRect(-w/2+11, -h/2+h*0.27, w-22, h*0.11, 2); cx.fill();
+  cx.fillStyle = 'rgba(180,240,255,0.35)';
+  cx.beginPath();
+  cx.moveTo(-hw*0.4, -hh+h*0.31);
+  cx.lineTo( hw*0.4, -hh+h*0.31);
+  cx.lineTo( hw*0.34,-hh+h*0.41);
+  cx.lineTo(-hw*0.34,-hh+h*0.41);
+  cx.closePath(); cx.fill();
 
-  // headlights
-  cx.fillStyle = '#fef08a';
-  cx.fillRect(-w/2+4, -h/2, 11, 5); cx.fillRect(w/2-15, -h/2, 11, 5);
+  // === HEADLIGHTS — sharp angular ===
+  cx.fillStyle = '#fef9c3';
+  cx.beginPath(); cx.moveTo(-hw+8,-hh); cx.lineTo(-hw*0.3,-hh); cx.lineTo(-hw*0.3,-hh+6); cx.lineTo(-hw+10,-hh+5); cx.closePath(); cx.fill();
+  cx.beginPath(); cx.moveTo(hw-8,-hh);  cx.lineTo(hw*0.3,-hh);  cx.lineTo(hw*0.3,-hh+6);  cx.lineTo(hw-10,-hh+5);  cx.closePath(); cx.fill();
+  // DRL lines
+  cx.strokeStyle = '#fef08a'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.moveTo(-hw+9,-hh+2); cx.lineTo(-hw*0.32,-hh+2); cx.stroke();
+  cx.beginPath(); cx.moveTo(hw-9,-hh+2);  cx.lineTo(hw*0.32,-hh+2);  cx.stroke();
 
-  // taillights
-  cx.fillStyle = '#f87171';
-  cx.fillRect(-w/2+4, h/2-5, 11, 5); cx.fillRect(w/2-15, h/2-5, 11, 5);
+  // === TAILLIGHTS — wide strip ===
+  cx.fillStyle = '#ef4444';
+  cx.fillRect(-hw*0.8, hh-5, hw*1.6, 5);
+  cx.fillStyle = '#fca5a5';
+  cx.fillRect(-hw*0.8, hh-3, hw*1.6, 2);
 
-  // wheels
-  cx.fillStyle = '#111';
-  [[-w/2-7, -h/2+8], [w/2-3, -h/2+8], [-w/2-7, h/2-26], [w/2-3, h/2-26]].forEach(([wx,wy]) => {
-    cx.fillRect(wx, wy, 10, 17);
-    cx.fillStyle = '#9ca3af'; cx.fillRect(wx+2, wy+3, 6, 11); cx.fillStyle = '#111';
+  // === WHEELS — fat low-profile ===
+  const ww = 13, wh = 20;
+  const wheelPos = [[-hw-4, -hh+8], [hw-9, -hh+8], [-hw-4, hh-28], [hw-9, hh-28]];
+  wheelPos.forEach(([wx,wy]) => {
+    cx.fillStyle = '#0f172a';
+    cx.beginPath(); cx.roundRect(wx, wy, ww, wh, 3); cx.fill();
+    // rim
+    cx.fillStyle = '#cbd5e1';
+    cx.beginPath(); cx.arc(wx+ww/2, wy+wh/2, ww*0.35, 0, Math.PI*2); cx.fill();
+    cx.fillStyle = '#64748b';
+    cx.beginPath(); cx.arc(wx+ww/2, wy+wh/2, ww*0.18, 0, Math.PI*2); cx.fill();
+    // spokes
+    cx.strokeStyle = '#94a3b8'; cx.lineWidth = 1;
+    for (let a = 0; a < Math.PI*2; a += Math.PI/3) {
+      cx.beginPath();
+      cx.moveTo(wx+ww/2, wy+wh/2);
+      cx.lineTo(wx+ww/2 + Math.cos(a)*ww*0.33, wy+wh/2 + Math.sin(a)*ww*0.33);
+      cx.stroke();
+    }
   });
 
-  // KAAN label
+  // === SIDE SKIRTS ===
+  cx.fillStyle = dark;
+  cx.fillRect(-hw-2, -hh+h*0.55, hw*2+4, 8);
+
+  // === KAAN label ===
   if (player) {
-    cx.fillStyle = 'rgba(255,255,255,0.13)';
-    cx.fillRect(-w/2+3, -h/2+h*0.44, w-6, 10);
     cx.fillStyle = '#fff';
-    cx.font = 'bold ' + Math.floor(w*0.21) + 'px Arial';
+    cx.font = 'bold ' + Math.floor(w*0.2) + 'px Arial';
     cx.textAlign = 'center'; cx.textBaseline = 'middle';
-    cx.fillText('KAAN', 0, -h/2 + h*0.49);
+    cx.globalAlpha = 0.9;
+    cx.fillText('KAAN', 0, -hh+h*0.51);
+    cx.globalAlpha = 1;
   }
+
   cx.restore();
 }
 
