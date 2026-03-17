@@ -17,6 +17,7 @@ canvas { border:2px solid #333; display:block; max-width:100vw; max-height:80vh;
 <div id="msg">SPACE to start &nbsp;|&nbsp; ← → to steer</div>
 <canvas id="c" width="420" height="560"></canvas>
 <audio id="vo" src="welcome.mp3" preload="auto"></audio>
+<script src="photos.js"></script>
 
 <script>
 'use strict';
@@ -214,6 +215,7 @@ function startGame() {
   AC().resume();
   state = 'play'; score = 0; spd = 4; fr = 0;
   obstacles = []; parts = []; obT = 0;
+  crashPhoto = null; crashPhotoAnim = false;
   P.x = W/2; P.tx = W/2;
   document.getElementById('msg').textContent = '← → to steer';
   playJingle();
@@ -239,6 +241,46 @@ function boom(x, y) {
 
 // ---- Main loop ----
 let squealCd = 0;
+
+// Crash photo
+let crashPhoto = null, crashPhotoScale = 0, crashPhotoAlpha = 0, crashPhotoAnim = false;
+const crashImgs = [];
+if (typeof KAAN_PHOTOS !== 'undefined') {
+  KAAN_PHOTOS.forEach(src => { const img = new Image(); img.src = src; crashImgs.push(img); });
+}
+
+function showCrashPhoto() {
+  if (!crashImgs.length) return;
+  crashPhoto = crashImgs[Math.floor(Math.random() * crashImgs.length)];
+  crashPhotoScale = 0.05;
+  crashPhotoAlpha = 0;
+  crashPhotoAnim = true;
+}
+
+function drawCrashPhoto() {
+  if (!crashPhotoAnim || !crashPhoto) return;
+  crashPhotoScale = Math.min(1, crashPhotoScale + 0.07);
+  crashPhotoAlpha = Math.min(1, crashPhotoAlpha + 0.08);
+  const size = Math.min(W, H) * 0.7 * crashPhotoScale;
+  cx.save();
+  cx.globalAlpha = crashPhotoAlpha;
+  // circle clip
+  cx.beginPath();
+  cx.arc(W/2, H/2 - 30, size/2, 0, Math.PI*2);
+  cx.clip();
+  cx.drawImage(crashPhoto, W/2 - size/2, H/2 - 30 - size/2, size, size);
+  cx.restore();
+  // border ring
+  cx.save();
+  cx.globalAlpha = crashPhotoAlpha;
+  cx.strokeStyle = '#ef4444';
+  cx.lineWidth = 4;
+  cx.beginPath();
+  cx.arc(W/2, H/2 - 30, size/2 + 2, 0, Math.PI*2);
+  cx.stroke();
+  cx.restore();
+  if (crashPhotoScale >= 1) crashPhotoAnim = false;
+}
 function loop() {
   requestAnimationFrame(loop);
   cx.clearRect(0, 0, W, H);
@@ -275,6 +317,7 @@ function loop() {
         boom(P.x, P.y); playCrash();
         state = 'dead';
         document.getElementById('msg').textContent = 'CRASHED! SPACE to retry';
+        setTimeout(showCrashPhoto, 400);
         break;
       }
     }
@@ -307,14 +350,15 @@ function loop() {
   }
 
   if (state === 'dead' && parts.length === 0) {
-    cx.fillStyle = 'rgba(0,0,0,0.65)'; cx.fillRect(0,0,W,H);
+    cx.fillStyle = 'rgba(0,0,0,0.72)'; cx.fillRect(0,0,W,H);
     cx.textAlign = 'center';
     cx.fillStyle = '#ef4444'; cx.font = 'bold 44px Arial';
-    cx.fillText('CRASH! 💥', W/2, H/2-55);
+    cx.fillText('CRASH! 💥', W/2, 60);
+    drawCrashPhoto();
     cx.fillStyle = '#fff'; cx.font = '26px Arial';
-    cx.fillText('Score: ' + score, W/2, H/2-5);
+    cx.fillText('Score: ' + score, W/2, H - 70);
     cx.fillStyle = '#a855f7'; cx.font = '18px Arial';
-    cx.fillText('SPACE to play again', W/2, H/2+38);
+    cx.fillText('SPACE or tap to play again', W/2, H - 35);
   }
 }
 
