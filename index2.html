@@ -182,27 +182,26 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// Touch controls - tap left/right half to steer, tap centre to start
-cv.addEventListener('touchstart', e => {
+// Touch controls — works on whole document so mobile doesn't miss taps
+let touching = false, touchSide = 0;
+document.addEventListener('touchstart', e => {
   e.preventDefault();
   AC().resume();
+  touching = true;
   const tx = e.touches[0].clientX;
-  const rect = cv.getBoundingClientRect();
-  const relX = tx - rect.left;
+  touchSide = tx < window.innerWidth / 2 ? -1 : 1;
   if (state !== 'play') { startGame(); return; }
-  if (relX < rect.width / 2) steer(-1);
-  else steer(1);
 }, { passive: false });
 
-// Hold touch to keep steering
-cv.addEventListener('touchmove', e => {
+document.addEventListener('touchmove', e => {
   e.preventDefault();
-  if (state !== 'play') return;
   const tx = e.touches[0].clientX;
-  const rect = cv.getBoundingClientRect();
-  const relX = tx - rect.left;
-  if (relX < rect.width / 2) { P.tx = Math.max(RL+LW/2, P.tx - spd*1.2); playSqueal(); }
-  else { P.tx = Math.min(RR-LW/2, P.tx + spd*1.2); playSqueal(); }
+  touchSide = tx < window.innerWidth / 2 ? -1 : 1;
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+  e.preventDefault();
+  touching = false;
 }, { passive: false });
 
 function steer(dir) {
@@ -253,10 +252,12 @@ function loop() {
     // scroll marks
     marks.forEach(m => { m.y += spd; if (m.y > H + 80) m.y -= 9 * 80; });
 
-    // steer
+    // steer (keys or touch)
     squealCd--;
-    if (keys['ArrowLeft'])  { P.tx = Math.max(RL+LW/2,  P.tx - spd*0.9); if(squealCd<=0){playSqueal();squealCd=12;} }
-    if (keys['ArrowRight']) { P.tx = Math.min(RR-LW/2, P.tx + spd*0.9); if(squealCd<=0){playSqueal();squealCd=12;} }
+    const goLeft  = keys['ArrowLeft']  || (touching && touchSide === -1);
+    const goRight = keys['ArrowRight'] || (touching && touchSide ===  1);
+    if (goLeft)  { P.tx = Math.max(RL+LW/2,  P.tx - spd*0.9); if(squealCd<=0){playSqueal();squealCd=12;} }
+    if (goRight) { P.tx = Math.min(RR-LW/2, P.tx + spd*0.9); if(squealCd<=0){playSqueal();squealCd=12;} }
     P.x += (P.tx - P.x) * 0.16;
 
     // spawn obstacles
