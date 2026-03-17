@@ -258,19 +258,21 @@ function showCrashPhoto() {
 }
 
 function drawCrashPhoto() {
-  if (!crashPhotoAnim || !crashPhoto) return;
-  crashPhotoScale = Math.min(1, crashPhotoScale + 0.07);
-  crashPhotoAlpha = Math.min(1, crashPhotoAlpha + 0.08);
+  if (!crashPhoto) return;
+  // animate in, then stay at full size
+  if (crashPhotoAnim) {
+    crashPhotoScale = Math.min(1, crashPhotoScale + 0.07);
+    crashPhotoAlpha = Math.min(1, crashPhotoAlpha + 0.08);
+    if (crashPhotoScale >= 1) crashPhotoAnim = false;
+  }
   const size = Math.min(W, H) * 0.7 * crashPhotoScale;
   cx.save();
   cx.globalAlpha = crashPhotoAlpha;
-  // circle clip
   cx.beginPath();
   cx.arc(W/2, H/2 - 30, size/2, 0, Math.PI*2);
   cx.clip();
   cx.drawImage(crashPhoto, W/2 - size/2, H/2 - 30 - size/2, size, size);
   cx.restore();
-  // border ring
   cx.save();
   cx.globalAlpha = crashPhotoAlpha;
   cx.strokeStyle = '#ef4444';
@@ -279,7 +281,6 @@ function drawCrashPhoto() {
   cx.arc(W/2, H/2 - 30, size/2 + 2, 0, Math.PI*2);
   cx.stroke();
   cx.restore();
-  if (crashPhotoScale >= 1) crashPhotoAnim = false;
 }
 function loop() {
   requestAnimationFrame(loop);
@@ -349,7 +350,7 @@ function loop() {
     cx.fillText('← → keys or tap left/right', W/2, H/2+38);
   }
 
-  if (state === 'dead' && parts.length === 0) {
+  if (state === 'dead') {
     cx.fillStyle = 'rgba(0,0,0,0.72)'; cx.fillRect(0,0,W,H);
     cx.textAlign = 'center';
     cx.fillStyle = '#ef4444'; cx.font = 'bold 44px Arial';
