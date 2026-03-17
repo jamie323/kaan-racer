@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaan Racer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial, sans-serif; overflow: hidden; }
+  canvas { border: 2px solid #333; display: block; }
+  #ui { color: #fff; text-align: center; margin-bottom: 10px; font-size: 18px; letter-spacing: 2px; }
+  #score { color: #a855f7; font-size: 22px; font-weight: bold; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="score">SCORE: 0</div>
+  <div id="msg" style="font-size:13px;color:#888;margin-top:4px;">← → to steer &nbsp;|&nbsp; SPACE to start</div>
+</div>
+<canvas id="c" width="420" height="580"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const W = c.width, H = c.height;
+let state = 'waiting';
+let score = 0, speed = 4, frame = 0;
+const ROAD_LEFT = 60, ROAD_RIGHT = 360, ROAD_W = 300, LANE_W = 100;
+const car = { x: W/2, y: H - 130, w: 54, h: 100, lane: 1 };
+let targetX = car.x;
+let keys = {};
+let marks = [], obstacles = [], particles = [], obTimer = 0;
+for(let i = 0; i < 8; i++) marks.push({ y: i * 90 });
+
+function drawLambo(x, y, w, h, isPlayer) {
+  ctx.save(); ctx.translate(x, y);
+  const purple = isPlayer ? '#9333ea' : '#dc2626';
+  const dark = isPlayer ? '#6b21a8' : '#991b1b';
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(0, h/2-4, w*0.44, 9, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = purple;
+  ctx.beginPath(); ctx.roundRect(-w/2, -h/2, w, h, [4,4,6,6]); ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.beginPath(); ctx.roundRect(-w/2+6, -h/2, w-12, h*0.42, [4,4,2,2]); ctx.fill();
+  ctx.fillStyle = 'rgba(150,220,255,0.5)';
+  ctx.beginPath(); ctx.roundRect(-w/2+9, -h/2+4, w-18, h*0.22, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(150,220,255,0.35)';
+  ctx.beginPath(); ctx.roundRect(-w/2+9, -h/2+h*0.28, w-18, h*0.12, 2); ctx.fill();
+  ctx.fillStyle = '#fef08a';
+  ctx.fillRect(-w/2+4, -h/2, 10, 5); ctx.fillRect(w/2-14, -h/2, 10, 5);
+  ctx.fillStyle = '#f87171';
+  ctx.fillRect(-w/2+4, h/2-5, 10, 5); ctx.fillRect(w/2-14, h/2-5, 10, 5);
+  ctx.fillStyle = '#1f2937';
+  ctx.fillRect(-w/2-8+2, -h/2+10, 10, 18); ctx.fillRect(w/2-2, -h/2+10, 10, 18);
+  ctx.fillRect(-w/2-8+2, h/2-28, 10, 18); ctx.fillRect(w/2-2, h/2-28, 10, 18);
+  ctx.fillStyle = '#d1d5db';
+  ctx.fillRect(-w/2-8+4, -h/2+13, 6, 12); ctx.fillRect(w/2, -h/2+13, 6, 12);
+  ctx.fillRect(-w/2-8+4, h/2-25, 6, 12); ctx.fillRect(w/2, h/2-25, 6, 12);
+  if(isPlayer) {
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(-w/2+2, -h/2+h*0.45, w-4, 9);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold ' + Math.floor(w*0.22) + 'px Arial';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('KAAN', 0, -h/2+h*0.495);
+  }
+  ctx.restore();
+}
+
+function drawRoad() {
+  ctx.fillStyle = '#374151'; ctx.fillRect(ROAD_LEFT, 0, ROAD_W, H);
+  ctx.fillStyle = '#1f2937'; ctx.fillRect(0, 0, ROAD_LEFT, H); ctx.fillRect(ROAD_RIGHT, 0, W-ROAD_RIGHT, H);
+  for(let i = 0; i < H; i += 40) {
+    ctx.fillStyle = (Math.floor((i + frame*speed*0.5)/40) % 2 === 0) ? '#ef4444' : '#fff';
+    ctx.fillRect(ROAD_LEFT-20, i, 20, 20); ctx.fillRect(ROAD_RIGHT, i, 20, 20);
+  }
+  ctx.strokeStyle = '#fff'; ctx.setLineDash([30,20]); ctx.lineWidth = 2;
+  marks.forEach(m => {
+    ctx.beginPath(); ctx.moveTo(ROAD_LEFT+LANE_W, m.y); ctx.lineTo(ROAD_LEFT+LANE_W, m.y+60); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ROAD_LEFT+LANE_W*2, m.y); ctx.lineTo(ROAD_LEFT+LANE_W*2, m.y+60); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+
+function spawnObstacle() {
+  const lane = Math.floor(Math.random()*3);
+  obstacles.push({ x: ROAD_LEFT + lane*LANE_W + LANE_W/2, y: -100, w: 44, h: 80 });
+}
+
+function collides(a, b) {
+  return Math.abs(a.x-b.x) < (a.w/2+b.w/2-6) && Math.abs(a.y-b.y) < (a.h/2+b.h/2-10);
+}
+
+function spawnParticles(x, y) {
+  for(let i=0;i<30;i++){
+    const a=Math.random()*Math.PI*2, s=2+Math.random()*6;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,r:3+Math.random()*5,color:['#9333ea','#f97316','#fbbf24','#fff'][Math.floor(Math.random()*4)]});
+  }
+}
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if(e.code==='Space'){if(state!=='playing')startGame();e.preventDefault();}
+  if(e.code==='ArrowLeft'||e.code==='ArrowRight')e.preventDefault();
+});
+document.addEventListener('keyup', e => keys[e.code]=false);
+let touchStartX=0;
+c.addEventListener('touchstart', e=>{touchStartX=e.touches[0].clientX;});
+c.addEventListener('touchend', e=>{
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  if(state!=='playing'){startGame();return;}
+  if(dx<-30){car.lane=Math.max(0,car.lane-1);targetX=ROAD_LEFT+car.lane*LANE_W+LANE_W/2;}
+  if(dx>30){car.lane=Math.min(2,car.lane+1);targetX=ROAD_LEFT+car.lane*LANE_W+LANE_W/2;}
+});
+
+function startGame(){
+  state='playing';score=0;speed=4;frame=0;obstacles=[];particles=[];obTimer=0;
+  car.lane=1;car.x=W/2;targetX=W/2;
+  document.getElementById('msg').textContent='← → to steer';
+}
+
+function loop(){
+  requestAnimationFrame(loop);
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#1a1a2e';ctx.fillRect(0,0,W,H);
+  drawRoad();
+
+  if(state==='playing'){
+    frame++;score++;
+    speed=4+Math.floor(score/300)*0.5;
+    document.getElementById('score').textContent='SCORE: '+score;
+    marks.forEach(m=>{m.y+=speed;if(m.y>H+90)m.y-=8*90;});
+    if(keys['ArrowLeft']){car.lane=Math.max(0,car.lane-0.06);targetX=ROAD_LEFT+car.lane*LANE_W+LANE_W/2;}
+    if(keys['ArrowRight']){car.lane=Math.min(2,car.lane+0.06);targetX=ROAD_LEFT+car.lane*LANE_W+LANE_W/2;}
+    car.x+=(targetX-car.x)*0.15;
+    obTimer++;
+    if(obTimer>Math.max(40,90-Math.floor(score/200)*5)){spawnObstacle();obTimer=0;}
+    obstacles.forEach(o=>o.y+=speed*1.2);
+    obstacles=obstacles.filter(o=>o.y<H+120);
+    obstacles.forEach(o=>{if(collides(car,o)){spawnParticles(car.x,car.y);state='dead';document.getElementById('msg').textContent='GAME OVER! SPACE to retry';}});
+  }
+
+  obstacles.forEach(o=>drawLambo(o.x,o.y,o.w,o.h,false));
+  if(state!=='dead')drawLambo(car.x,car.y,car.w,car.h,true);
+
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.life-=0.03;p.vy+=0.1;ctx.globalAlpha=p.life;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();});
+  ctx.globalAlpha=1;
+  particles=particles.filter(p=>p.life>0);
+
+  if(state==='waiting'){
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#a855f7';ctx.font='bold 38px Arial';ctx.textAlign='center';
+    ctx.fillText('KAAN RACER 🏎️',W/2,H/2-40);
+    ctx.fillStyle='#fff';ctx.font='18px Arial';ctx.fillText('Press SPACE to start',W/2,H/2+10);
+    ctx.fillStyle='#9ca3af';ctx.font='14px Arial';ctx.fillText('← → arrow keys to steer',W/2,H/2+40);
+  }
+  if(state==='dead'&&particles.length===0){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#ef4444';ctx.font='bold 40px Arial';ctx.textAlign='center';ctx.fillText('CRASH! 💥',W/2,H/2-50);
+    ctx.fillStyle='#fff';ctx.font='24px Arial';ctx.fillText('Score: '+score,W/2,H/2);
+    ctx.fillStyle='#a855f7';ctx.font='18px Arial';ctx.fillText('SPACE to play again',W/2,H/2+40);
+  }
+}
+loop();
+</script>
+</body>
+</html>
