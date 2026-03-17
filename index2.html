@@ -6,10 +6,10 @@
 <title>Kaan Racer</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:Arial,sans-serif; overflow:hidden; }
+body { background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:Arial,sans-serif; overflow:hidden; touch-action:none; }
 #score { color:#a855f7; font-size:22px; font-weight:bold; text-align:center; margin-bottom:6px; }
 #msg { color:#888; font-size:13px; text-align:center; margin-bottom:8px; }
-canvas { border:2px solid #333; display:block; }
+canvas { border:2px solid #333; display:block; max-width:100vw; max-height:80vh; }
 </style>
 </head>
 <body>
@@ -182,14 +182,28 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-let touchX = 0;
-cv.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; AC().resume(); });
-cv.addEventListener('touchend', e => {
+// Touch controls - tap left/right half to steer, tap centre to start
+cv.addEventListener('touchstart', e => {
+  e.preventDefault();
+  AC().resume();
+  const tx = e.touches[0].clientX;
+  const rect = cv.getBoundingClientRect();
+  const relX = tx - rect.left;
   if (state !== 'play') { startGame(); return; }
-  const dx = e.changedTouches[0].clientX - touchX;
-  if (dx < -30) steer(-1);
-  if (dx > 30) steer(1);
-});
+  if (relX < rect.width / 2) steer(-1);
+  else steer(1);
+}, { passive: false });
+
+// Hold touch to keep steering
+cv.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (state !== 'play') return;
+  const tx = e.touches[0].clientX;
+  const rect = cv.getBoundingClientRect();
+  const relX = tx - rect.left;
+  if (relX < rect.width / 2) { P.tx = Math.max(RL+LW/2, P.tx - spd*1.2); playSqueal(); }
+  else { P.tx = Math.min(RR-LW/2, P.tx + spd*1.2); playSqueal(); }
+}, { passive: false });
 
 function steer(dir) {
   P.tx = Math.max(RL + LW/2, Math.min(RR - LW/2, P.tx + dir * LW));
@@ -288,7 +302,7 @@ function loop() {
     cx.fillStyle = '#fff'; cx.font = '19px Arial';
     cx.fillText('Press SPACE to start', W/2, H/2+5);
     cx.fillStyle = '#9ca3af'; cx.font = '14px Arial';
-    cx.fillText('← → arrow keys to steer', W/2, H/2+38);
+    cx.fillText('← → keys or tap left/right', W/2, H/2+38);
   }
 
   if (state === 'dead' && parts.length === 0) {
