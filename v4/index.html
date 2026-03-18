@@ -447,9 +447,9 @@ document.addEventListener('touchmove',e=>{
 document.addEventListener('touchend',e=>{e.preventDefault();touching=false;},{passive:false});
 
 function handleSpace(){
-  if(state==='wait'){ state='skinpick'; return; }
+  if(state==='wait'){ startGame(); return; }
   if(state==='skinpick'){ startGame(); return; }
-  if(state==='dead'){ state='skinpick'; return; }
+  if(state==='dead'){ startGame(); return; }
 }
 
 // ---- Skin picker screen ----
