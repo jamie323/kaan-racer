@@ -731,6 +731,17 @@ function loop(){
     } else {
       cx.fillStyle='#0a0a1a'; cx.fillRect(0,0,W,H);
     }
+
+    // --- Hide QUIT button (bottom-left of source image, ~70-310 x 510-595 of 1536x1024) ---
+    // Scaled: x=12..85, y=279..326 on 420x560 canvas — paint over with matching dark navy
+    cx.fillStyle='#1c2d4a';
+    cx.fillRect(11, 275, 80, 58);
+
+    // --- Hide coin counter top-right (~1045-1220 x 68-120 of 1536x1024) ---
+    // Scaled: x=286..333, y=37..66
+    cx.fillStyle='#0e1624';
+    cx.fillRect(284, 34, 54, 36);
+
     // Overlay: tap prompt at bottom
     cx.save();
     cx.fillStyle='rgba(0,0,0,0.45)';
