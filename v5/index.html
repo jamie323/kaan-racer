@@ -227,20 +227,46 @@ function startBGM() {
 }
 
 
-// ---- Voice announcer ----
+// ---- Voice announcer (priority queue — first caller wins, no overlap) ----
 const voiceAudios = {};
+let voicePlaying = false;
+let voiceQueue = [];
+
 function preloadVoices(){
   if(typeof VOICE_LINES === 'undefined') return;
   Object.entries(VOICE_LINES).forEach(([k,v])=>{
-    const a = new Audio(); a.src = v; a.volume = 0.9;
+    const a = new Audio(); a.src = v; a.volume = 1.0;
+    a.onended = () => { voicePlaying = false; drainVoiceQueue(); };
     voiceAudios[k] = a;
   });
 }
-function announce(key){
+
+function drainVoiceQueue(){
+  if(voicePlaying || voiceQueue.length === 0) return;
+  const key = voiceQueue.shift();
   const a = voiceAudios[key];
-  if(!a) return;
+  if(!a) { drainVoiceQueue(); return; }
+  voicePlaying = true;
   a.currentTime = 0;
-  a.play().catch(()=>{});
+  a.play().catch(()=>{ voicePlaying = false; drainVoiceQueue(); });
+}
+
+function announce(key, priority){
+  // priority=true: play immediately (skip queue), priority=false: queue
+  if(priority){
+    // Stop current, jump to this
+    Object.values(voiceAudios).forEach(a=>{ if(!a.paused){a.pause();a.currentTime=0;} });
+    voicePlaying = false;
+    voiceQueue = [key];
+    drainVoiceQueue();
+  } else {
+    // Only queue if nothing playing — first caller wins
+    if(!voicePlaying && voiceQueue.length === 0){
+      voiceQueue.push(key);
+      drainVoiceQueue();
+    }
+    // else: silently drop (first caller keeps priority)
+  }
 }
 
 // ---- Road ----
@@ -272,6 +298,13 @@ function drawRoad() {
   sg.addColorStop(1,'rgba(0,0,0,0)');
   cx.fillStyle=sg;cx.fillRect(RL,0,RW,H);
   if(activeSlowmo>0){cx.fillStyle='rgba(168,85,247,0.06)';cx.fillRect(RL,0,RW,H);}
+
+  // Invincibility haze (after life lost — white pulse)
+  if(invincible>0){
+    const pulse = Math.sin(fr * 0.25) * 0.5 + 0.5;
+    cx.fillStyle=`rgba(255,255,255,${0.04 + pulse * 0.06})`;
+    cx.fillRect(RL,0,RW,H);
+  }
 
   for(let i=0;i<H;i+=40){
     const alt=Math.floor((i+fr*spd*0.5)/40)%2===0;
@@ -402,6 +435,18 @@ function drawCar(x,y,w,h,player,flash,skinIdx,swerveOff) {
     cx.save();cx.shadowColor='#fff';cx.shadowBlur=6;cx.fillStyle='#fff';
     cx.font='bold '+Math.floor(w*0.2)+'px Arial';cx.textAlign='center';cx.textBaseline='middle';
     cx.globalAlpha=flash?0.4:0.9;cx.fillText('KAAN',0,-hh+h*0.51);cx.restore();
+  }
+  // Invincibility white glow ring (after life lost)
+  if(player&&invincible>0){
+    cx.save();
+    const iPulse = Math.sin(fr * 0.3) * 0.5 + 0.5;
+    cx.globalAlpha = 0.3 + iPulse * 0.5;
+    cx.strokeStyle = '#ffffff';
+    cx.lineWidth = 3 + iPulse * 3;
+    cx.shadowColor = '#ffffff';
+    cx.shadowBlur = 20 + iPulse * 20;
+    cx.beginPath();cx.ellipse(0,0,hw*1.5,hh*1.25,0,0,Math.PI*2);cx.stroke();
+    cx.restore();
   }
   // shield bubble
   if(player&&activeShield>0){
@@ -849,7 +894,7 @@ function loop(){
     if(newLevel>level){
       level=newLevel;levelBanner='LEVEL '+level+' 🔥';levelBannerAlpha=1;levelBannerTimer=90;
       playLevelUp();
-      if(level>=2&&level<=5)announce('level'+level);
+      if(level>=2&&level<=5)announce('level'+level, true);
       SKINS.forEach((s,i)=>{if(s.unlock>0&&score>=s.unlock&&!unlockedSkins.includes(i)){unlockedSkins.push(i);localStorage.setItem('kaanSkins',JSON.stringify(unlockedSkins));levelBanner='🔓 '+s.name+' UNLOCKED!';levelBannerAlpha=1;levelBannerTimer=120;}});
     }
     if(levelBannerTimer>0){levelBannerTimer--;if(levelBannerTimer<30)levelBannerAlpha=levelBannerTimer/30;}
