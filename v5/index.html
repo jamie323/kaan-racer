@@ -1045,20 +1045,13 @@ function loop(){
       });
     }
 
-    // Collision
-    if(invincible===0){
+    // Normal collision (only when not turbo/shield/invincible)
+    if(invincible===0&&activeTurbo===0&&activeShield===0){
       for(const o of obstacles){
         if(hit(P,o)){
-          if(activeShield>0){
-            activeShield=0;boom(o.x,o.y);playCrash();
-            obstacles=obstacles.filter(ob=>ob!==o);
-            levelBanner='🛡️ BLOCKED!';levelBannerAlpha=1;levelBannerTimer=50;
-            announce('blocked');
-            combo=0;scoreMultiplier=1;
-          {
-            boom(P.x,P.y);lives--;combo=0;scoreMultiplier=1;updateHUD();
-            if(navigator.vibrate)navigator.vibrate([50,30,50]);
-            if(lives<=0){
+          boom(P.x,P.y);lives--;combo=0;scoreMultiplier=1;updateHUD();
+          if(navigator.vibrate)navigator.vibrate([50,30,50]);
+          if(lives<=0){
               playCrash();playGameOver();state='dead';
               const newHi=score>hiScore;
               if(newHi){hiScore=score;localStorage.setItem('kaanHiScore',hiScore);newRecord=true;}
@@ -1077,8 +1070,7 @@ function loop(){
           break;
         }
       }
-    }
-    checkAchievements();
+        checkAchievements();
     spawnExhaust();
   }
 
@@ -1161,7 +1153,7 @@ function loop(){
     cx.fillStyle='#0ea5e9';cx.font='13px Arial';cx.textAlign='center';cx.textBaseline='middle';
     cx.fillText('📤 Share Score',W/2,H-26);cx.restore();
   }
-}
+} // end loop
 
 cv.addEventListener('click',e=>{
   const rect=cv.getBoundingClientRect();
