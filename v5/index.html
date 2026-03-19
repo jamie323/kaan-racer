@@ -23,6 +23,7 @@ canvas { display:block; max-width:100vw; max-height:78vh; border-radius:4px; box
 </div>
 <div id="msg">SPACE to start &nbsp;|&nbsp; ← → or swipe</div>
 <canvas id="c" width="420" height="560"></canvas>
+<input id="nameInput" type="text" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" style="position:fixed;top:-100px;left:0;opacity:0;width:1px;height:1px;border:none;outline:none;" />
 <audio id="vo" src="../welcome.mp3" preload="auto"></audio>
 <audio id="bgm" loop preload="auto" style="display:none"></audio>
 <script src="../photos.js"></script>
@@ -590,6 +591,8 @@ async function submitToLeaderboard(name,score){
   }catch(e){}
 }
 function submitScore(){
+  const inp=document.getElementById('nameInput');
+  if(inp)inp.blur();
   const name=(pendingName.trim()||'ANON').slice(0,12);
   submitToLeaderboard(name,score);
   fetchLeaderboard().then(()=>{state='leaderboard';});
@@ -748,6 +751,11 @@ function drawCrashPhoto(){
 
 // ---- Name input overlay ----
 function drawNameInput(){
+  // Sync from real input (mobile keyboard)
+  const inp=document.getElementById('nameInput');
+  if(inp&&document.activeElement===inp){
+    pendingName=inp.value.toUpperCase().slice(0,12);
+  }
   cx.fillStyle='rgba(0,0,5,0.82)';cx.fillRect(0,0,W,H);
   cx.save();cx.shadowColor='#fbbf24';cx.shadowBlur=20;
   cx.fillStyle='#fbbf24';cx.font='bold 28px Arial';cx.textAlign='center';
@@ -1064,7 +1072,13 @@ function loop(){
               setTimeout(showCrashPhoto,400);
               // Show name entry if score qualifies for top 10
               const minScore = leaderboardData.length<10 ? 0 : (leaderboardData[9]?.score||0);
-              if(score>minScore||leaderboardData.length<10){setTimeout(()=>{state='nameinput';},2200);}
+              if(score>minScore||leaderboardData.length<10){setTimeout(()=>{
+                state='nameinput';
+                pendingName='';
+                const inp=document.getElementById('nameInput');
+                inp.value='';
+                inp.focus();
+              },2200);}
             } else {
               playCrash();playLifeLost();invincible=120;
               obstacles=obstacles.filter(ob=>ob!==o&&Math.abs(ob.y-P.y)>80);
@@ -1177,7 +1191,14 @@ cv.addEventListener('click',e=>{
     if(mx>W/2-60&&mx<W/2+60&&my>H-38&&my<H-14){shareScore();return;}
     startBGM();startGame();return;
   }
-  if(state==='nameinput'){submitScore();return;}
+  if(state==='nameinput'){
+    const inp=document.getElementById('nameInput');
+    // Tap on input box area = focus keyboard; tap elsewhere = submit
+    if(inp&&mx>W/2-100&&mx<W/2+100&&my>H/2+5&&my<H/2+41){
+      inp.focus(); return;
+    }
+    submitScore(); return;
+  }
   if(state==='leaderboard'){state='wait';return;}
   if(state==='achievements'){state='wait';return;}
   if(state==='settings'){
