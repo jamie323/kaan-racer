@@ -74,7 +74,7 @@ let level = 1;
 let levelBanner = '', levelBannerAlpha = 0, levelBannerTimer = 0;
 let invincible = 0;
 let newRecord = false;
-let activeShield = 0, activeTurbo = 0, activeSlowmo = 0;
+let activeShield = 0, activeTurbo = 0, activeSlowmo = 0, activeMagnet = 0;
 let exhaust = [];
 let pendingName = '';
 let leaderboardData = [];
@@ -170,9 +170,11 @@ const speedLines = Array.from({length:22}, () => ({
 
 // ---- Powerup types ----
 const PU_TYPES = [
-  { type:'shield', icon:'🛡️', col:'#0ea5e9', label:'SHIELD!',  dur: 300 },
-  { type:'turbo',  icon:'⚡', col:'#fbbf24', label:'TURBO!',   dur: 180 },
-  { type:'slowmo', icon:'🐌', col:'#a855f7', label:'SLOW-MO!', dur: 240 },
+  { type:'shield', icon:'🛡️', col:'#0ea5e9', label:'SHIELD!',   dur: 300 },
+  { type:'turbo',  icon:'⚡', col:'#fbbf24', label:'TURBO MODE!', dur: 210 },
+  { type:'slowmo', icon:'🐌', col:'#a855f7', label:'SLOW-MO!',  dur: 240 },
+  { type:'magnet', icon:'🧲', col:'#ec4899', label:'MAGNET!',   dur: 240 },
+  { type:'nuke',   icon:'💥', col:'#ef4444', label:'NUKE!',     dur: 1   },
 ];
 
 // ---- Menu image ----
@@ -299,6 +301,12 @@ function drawRoad() {
   cx.fillStyle=sg;cx.fillRect(RL,0,RW,H);
   if(activeSlowmo>0){cx.fillStyle='rgba(168,85,247,0.06)';cx.fillRect(RL,0,RW,H);}
 
+  // Turbo haze - orange/yellow fire effect across road
+  if(activeTurbo>0){
+    const tPulse = Math.sin(fr * 0.4) * 0.5 + 0.5;
+    cx.fillStyle=`rgba(251,191,36,${0.04 + tPulse * 0.06})`;
+    cx.fillRect(RL,0,RW,H);
+  }
   // Invincibility haze (after life lost — white pulse)
   if(invincible>0){
     const pulse = Math.sin(fr * 0.25) * 0.5 + 0.5;
@@ -436,8 +444,8 @@ function drawCar(x,y,w,h,player,flash,skinIdx,swerveOff) {
     cx.font='bold '+Math.floor(w*0.2)+'px Arial';cx.textAlign='center';cx.textBaseline='middle';
     cx.globalAlpha=flash?0.4:0.9;cx.fillText('KAAN',0,-hh+h*0.51);cx.restore();
   }
-  // Invincibility white glow ring (after life lost)
-  if(player&&invincible>0){
+  // Invincibility / turbo white glow ring
+  if(player&&(invincible>0||activeTurbo>0)){
     cx.save();
     const iPulse = Math.sin(fr * 0.3) * 0.5 + 0.5;
     cx.globalAlpha = 0.3 + iPulse * 0.5;
@@ -592,7 +600,7 @@ function startGame(){
   AC().resume();startBGM();preloadVoices();
   state='play';score=0;spd=4;fr=0;
   lives=3;coinCount=0;level=1;invincible=0;newRecord=false;
-  activeShield=0;activeTurbo=0;activeSlowmo=0;
+  activeShield=0;activeTurbo=0;activeSlowmo=0;activeMagnet=0;
   combo=0;comboTimer=0;scoreMultiplier=1;nearMissFlash=0;nearMissCooldown=0;
   obstacles=[];parts=[];coins=[];powerups=[];exhaust=[];
   obT=0;coinT=0;puT=0;
@@ -696,7 +704,11 @@ function drawPowerupHUD(){
   }
   if(activeSlowmo>0){
     cx.save();cx.globalAlpha=0.9;cx.fillStyle='rgba(0,0,0,0.5)';cx.beginPath();cx.roundRect(x,y-14,70,18,4);cx.fill();
-    cx.fillStyle='#a855f7';cx.font='11px Arial';cx.textAlign='left';cx.fillText('🐌 '+(Math.ceil(activeSlowmo/60))+'s',x+4,y);cx.restore();
+    cx.fillStyle='#a855f7';cx.font='11px Arial';cx.textAlign='left';cx.fillText('🐌 '+(Math.ceil(activeSlowmo/60))+'s',x+4,y);cx.restore();x+=78;
+  }
+  if(activeMagnet>0){
+    cx.save();cx.globalAlpha=0.9;cx.fillStyle='rgba(0,0,0,0.5)';cx.beginPath();cx.roundRect(x,y-14,70,18,4);cx.fill();
+    cx.fillStyle='#ec4899';cx.font='11px Arial';cx.textAlign='left';cx.fillText('🧲 '+(Math.ceil(activeMagnet/60))+'s',x+4,y);cx.restore();
   }
 }
 
@@ -877,6 +889,7 @@ function loop(){
     if(activeShield>0)activeShield--;
     if(activeTurbo>0)activeTurbo--;
     if(activeSlowmo>0)activeSlowmo--;
+    if(activeMagnet>0)activeMagnet--;
 
     // Near miss flash decay
     if(nearMissFlash>0)nearMissFlash--;
@@ -925,7 +938,16 @@ function loop(){
       if(o.swerve){o.x+=Math.sin((fr+o.swervePhase)*0.05)*1.2;o.x=Math.max(RL+o.w/2,Math.min(RR-o.w/2,o.x));}
     });
     obstacles=obstacles.filter(o=>o.y<H+120);
-    coins.forEach(c=>c.y+=spd*1.1);coins=coins.filter(c=>c.y<H+50&&!c.collected);
+    coins.forEach(c=>{
+      c.y+=spd*1.1;
+      if(activeMagnet>0){
+        // Pull toward player
+        const dx=P.x-c.x, dy=P.y-c.y;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist>5){c.x+=dx/dist*8;c.y+=dy/dist*8;}
+      }
+    });
+    coins=coins.filter(c=>c.y<H+50&&!c.collected);
     powerups.forEach(p=>p.y+=spd*1.0);powerups=powerups.filter(p=>p.y<H+50);
 
     // Coin collect
@@ -944,14 +966,60 @@ function loop(){
     powerups.forEach((pu,i)=>{
       if(hitPU(P,pu)){
         if(pu.type==='shield'){activeShield=300;announce('shield');}
-        else if(pu.type==='turbo'){activeTurbo=180;announce('turbo');}
+        else if(pu.type==='turbo'){
+          activeTurbo=210;invincible=210; // turbo = destroyer mode (invincible for duration)
+          announce('turbo',true); // priority scream
+          // Fireworks explosion on screen
+          for(let fw=0;fw<80;fw++){
+            const a=Math.random()*Math.PI*2,s=3+Math.random()*10;
+            const cx2=RL+Math.random()*RW, cy2=Math.random()*H;
+            parts.push({x:cx2,y:cy2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r:4+Math.random()*6,life:1,
+              col:['#fbbf24','#f97316','#ef4444','#0ea5e9','#a855f7','#fff'][Math.floor(Math.random()*6)]});
+          }
+        }
         else if(pu.type==='slowmo'){activeSlowmo=240;announce('slowmo');}
+        else if(pu.type==='magnet'){activeMagnet=240;announce('magnet');}
+        else if(pu.type==='nuke'){
+          // Destroy all obstacles on screen
+          const nukeCount=obstacles.length;
+          obstacles.forEach(o=>boom(o.x,o.y));
+          obstacles=[];
+          score+=nukeCount*100*scoreMultiplier;
+          announce('nuke',true);
+        }
         playPowerup(pu.type);
         const pt=PU_TYPES.find(t=>t.type===pu.type);
         levelBanner=pt.icon+' '+pt.label;levelBannerAlpha=1;levelBannerTimer=60;
         powerups.splice(i,1);
       }
     });
+
+    // Turbo destroyer — while turbo active, ram through cars
+    if(activeTurbo>0){
+      obstacles.forEach((o,i)=>{
+        if(hit(P,o)&&!o.destroying){
+          o.destroying=true;
+          boom(o.x,o.y);playCrash();
+          score+=150*scoreMultiplier;
+          if(navigator.vibrate)navigator.vibrate(20);
+          setTimeout(()=>{obstacles=obstacles.filter(ob=>ob!==o);},0);
+        }
+      });
+      obstacles=obstacles.filter(o=>!o.destroying);
+    }
+
+    // Shield block
+    if(activeShield>0&&activeTurbo===0){
+      for(const o of obstacles){
+        if(hit(P,o)){
+          activeShield=0;boom(o.x,o.y);playCrash();
+          obstacles=obstacles.filter(ob=>ob!==o);
+          levelBanner='🛡️ BLOCKED!';levelBannerAlpha=1;levelBannerTimer=50;
+          announce('blocked');
+          break;
+        }
+      }
+    }
 
     // Near miss detection + combo on passed obstacles
     if(invincible===0){
@@ -987,7 +1055,7 @@ function loop(){
             levelBanner='🛡️ BLOCKED!';levelBannerAlpha=1;levelBannerTimer=50;
             announce('blocked');
             combo=0;scoreMultiplier=1;
-          } else {
+          {
             boom(P.x,P.y);lives--;combo=0;scoreMultiplier=1;updateHUD();
             if(navigator.vibrate)navigator.vibrate([50,30,50]);
             if(lives<=0){
