@@ -26,6 +26,7 @@ canvas { display:block; max-width:100vw; max-height:78vh; border-radius:4px; box
 <audio id="vo" src="../welcome.mp3" preload="auto"></audio>
 <audio id="bgm" loop preload="auto" style="display:none"></audio>
 <script src="../photos.js"></script>
+<script src="voices.js"></script>
 <script src="music.js"></script>
 <script>
 'use strict';
@@ -61,7 +62,8 @@ function SeededRNG(seed) {
 let rng = Math.random; // replaced when daily mode active
 
 // ---- Game state ----
-let state = 'wait'; // wait | play | dead | nameinput | leaderboard | achievements
+let state = 'wait'; // wait | play | dead | nameinput | leaderboard | achievements | settings
+let topPlayer = {name:'---',score:0};
 let score = 0, spd = 4, fr = 0;
 let lives = 3, coinCount = 0;
 let obstacles = [], parts = [], coins = [], powerups = [];
@@ -222,6 +224,23 @@ function playVoice() { const el=document.getElementById('vo'); if(!el)return; el
 function startBGM() {
   const bgm=document.getElementById('bgm');
   if(bgm&&bgm.paused&&bgm.src){ bgm.volume=0.35; bgm.play().catch(()=>{}); }
+}
+
+
+// ---- Voice announcer ----
+const voiceAudios = {};
+function preloadVoices(){
+  if(typeof VOICE_LINES === 'undefined') return;
+  Object.entries(VOICE_LINES).forEach(([k,v])=>{
+    const a = new Audio(); a.src = v; a.volume = 0.9;
+    voiceAudios[k] = a;
+  });
+}
+function announce(key){
+  const a = voiceAudios[key];
+  if(!a) return;
+  a.currentTime = 0;
+  a.play().catch(()=>{});
 }
 
 // ---- Road ----
@@ -503,6 +522,7 @@ async function fetchLeaderboard(){
       headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY}
     });
     leaderboardData=await r.json();
+    if(leaderboardData.length>0)topPlayer=leaderboardData[0];
   }catch(e){leaderboardData=[];}
 }
 async function submitToLeaderboard(name,score){
@@ -524,7 +544,7 @@ function submitScore(){
 
 // ---- Game ----
 function startGame(){
-  AC().resume();startBGM();
+  AC().resume();startBGM();preloadVoices();
   state='play';score=0;spd=4;fr=0;
   lives=3;coinCount=0;level=1;invincible=0;newRecord=false;
   activeShield=0;activeTurbo=0;activeSlowmo=0;
@@ -742,6 +762,49 @@ function drawAchievementsScreen(){
   cx.fillText('ESC or tap to go back',W/2,H-20);
 }
 
+
+// ---- Settings screen ----
+function drawSettings(){
+  cx.fillStyle='rgba(0,0,5,0.88)';cx.fillRect(0,0,W,H);
+  cx.save();cx.shadowColor='#0ea5e9';cx.shadowBlur=20;
+  cx.fillStyle='#0ea5e9';cx.font='bold 26px Arial';cx.textAlign='center';
+  cx.fillText('⚙️ SETTINGS',W/2,50);cx.restore();
+  cx.fillStyle='#64748b';cx.font='13px Arial';cx.textAlign='center';
+  cx.fillText('Daily Challenge Mode',W/2,100);
+  // Toggle
+  cx.fillStyle=isDailyChallenge?'#22c55e':'rgba(255,255,255,0.1)';
+  cx.beginPath();cx.roundRect(W/2-30,115,60,28,14);cx.fill();
+  cx.fillStyle='#fff';cx.font='bold 12px Arial';
+  cx.fillText(isDailyChallenge?'ON':'OFF',W/2,129);
+  cx.fillStyle='#475569';cx.font='12px Arial';
+  cx.fillText(isDailyChallenge?'Same obstacles for everyone today':'Normal random mode',W/2,160);
+  if(isDailyChallenge&&dailyDone){
+    cx.fillStyle='#f97316';cx.font='12px Arial';
+    cx.fillText('Daily attempt used ✓ — come back tomorrow!',W/2,180);
+  }
+  // Skin picker
+  cx.fillStyle='#94a3b8';cx.font='13px Arial';cx.fillText('Car Skin',W/2,215);
+  SKINS.forEach((skin,i)=>{
+    const locked=!unlockedSkins.includes(i);
+    const xp=60+i*65, yp=235;
+    cx.save();cx.globalAlpha=locked?0.3:1;
+    cx.fillStyle=i===selectedSkin?skin.col:'rgba(255,255,255,0.08)';
+    cx.beginPath();cx.roundRect(xp-20,yp,40,40,6);cx.fill();
+    if(i===selectedSkin){cx.strokeStyle=skin.col;cx.lineWidth=2;cx.beginPath();cx.roundRect(xp-20,yp,40,40,6);cx.stroke();}
+    cx.fillStyle='#fff';cx.font='10px Arial';cx.textAlign='center';
+    cx.fillText(locked?'🔒':skin.name,xp,yp+25);
+    if(locked){cx.fillStyle='#fbbf24';cx.font='9px Arial';cx.fillText(skin.unlock/1000+'k',xp,yp+38);}
+    cx.restore();
+  });
+  cx.fillStyle='#475569';cx.font='11px Arial';cx.textAlign='center';
+  cx.fillText('Tap a skin to select',W/2,290);
+  // Close
+  cx.fillStyle='rgba(14,165,233,0.2)';cx.beginPath();cx.roundRect(W/2-60,H-50,120,30,6);cx.fill();
+  cx.strokeStyle='#0ea5e9';cx.lineWidth=1.5;cx.beginPath();cx.roundRect(W/2-60,H-50,120,30,6);cx.stroke();
+  cx.fillStyle='#0ea5e9';cx.font='bold 14px Arial';cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillText('← Back',W/2,H-35);
+}
+
 // ---- Main loop ----
 let squealCd=0;
 
@@ -756,9 +819,12 @@ function loop(){
   if(state==='nameinput'){drawNameInput();return;}
   if(state==='leaderboard'){drawLeaderboard();return;}
   if(state==='achievements'){drawAchievementsScreen();return;}
+  if(state==='settings'){drawSettings();return;}
 
   if(state==='play'){
-    score++;
+    const baseScoreInc = 1 + Math.floor(score/500)*0.3; // faster per level
+    const turboBoost = activeTurbo>0 ? 2.5 : 1;
+    score += Math.floor(baseScoreInc * turboBoost * scoreMultiplier) || 1;
     const slowFactor=activeSlowmo>0?0.5:1;
     spd=Math.min(8,(4+Math.floor(score/500)*0.35))*(activeTurbo>0?1.6:1)*slowFactor;
 
@@ -783,6 +849,7 @@ function loop(){
     if(newLevel>level){
       level=newLevel;levelBanner='LEVEL '+level+' 🔥';levelBannerAlpha=1;levelBannerTimer=90;
       playLevelUp();
+      if(level>=2&&level<=5)announce('level'+level);
       SKINS.forEach((s,i)=>{if(s.unlock>0&&score>=s.unlock&&!unlockedSkins.includes(i)){unlockedSkins.push(i);localStorage.setItem('kaanSkins',JSON.stringify(unlockedSkins));levelBanner='🔓 '+s.name+' UNLOCKED!';levelBannerAlpha=1;levelBannerTimer=120;}});
     }
     if(levelBannerTimer>0){levelBannerTimer--;if(levelBannerTimer<30)levelBannerAlpha=levelBannerTimer/30;}
@@ -831,9 +898,9 @@ function loop(){
     // Powerup collect
     powerups.forEach((pu,i)=>{
       if(hitPU(P,pu)){
-        if(pu.type==='shield')activeShield=300;
-        else if(pu.type==='turbo')activeTurbo=180;
-        else if(pu.type==='slowmo')activeSlowmo=240;
+        if(pu.type==='shield'){activeShield=300;announce('shield');}
+        else if(pu.type==='turbo'){activeTurbo=180;announce('turbo');}
+        else if(pu.type==='slowmo'){activeSlowmo=240;announce('slowmo');}
         playPowerup(pu.type);
         const pt=PU_TYPES.find(t=>t.type===pu.type);
         levelBanner=pt.icon+' '+pt.label;levelBannerAlpha=1;levelBannerTimer=60;
@@ -848,6 +915,7 @@ function loop(){
           o.passed=true;
           combo++;comboTimer=90;
           playComboUp();
+          if(combo===5)announce('combo5');else if(combo===10)announce('combo10');
           checkAchievements();
           // Near miss check
           if(nearMissCooldown===0){
@@ -856,7 +924,7 @@ function loop(){
             if(dx<(P.w+o.w)/2+NEAR_MISS_DIST&&dy<(P.h+o.h)/2+NEAR_MISS_DIST){
               nearMissFlash=20;nearMissCooldown=40;
               score+=50*scoreMultiplier;
-              playNearMiss();
+              playNearMiss();announce('nearmiss');
               if(navigator.vibrate)navigator.vibrate(30);
             }
           }
@@ -872,6 +940,7 @@ function loop(){
             activeShield=0;boom(o.x,o.y);playCrash();
             obstacles=obstacles.filter(ob=>ob!==o);
             levelBanner='🛡️ BLOCKED!';levelBannerAlpha=1;levelBannerTimer=50;
+            announce('blocked');
             combo=0;scoreMultiplier=1;
           } else {
             boom(P.x,P.y);lives--;combo=0;scoreMultiplier=1;updateHUD();
@@ -884,7 +953,9 @@ function loop(){
               checkAchievements(isDailyChallenge);
               document.getElementById('msg').textContent='GAME OVER! SPACE to retry';
               setTimeout(showCrashPhoto,400);
-              if(newHi){setTimeout(()=>{state='nameinput';},2200);}
+              // Show name entry if score qualifies for top 10
+              const minScore = leaderboardData.length<10 ? 0 : (leaderboardData[9]?.score||0);
+              if(score>minScore||leaderboardData.length<10){setTimeout(()=>{state='nameinput';},2200);}
             } else {
               playCrash();playLifeLost();invincible=120;
               obstacles=obstacles.filter(ob=>ob!==o&&Math.abs(ob.y-P.y)>80);
@@ -920,24 +991,45 @@ function loop(){
   if(state==='play'){drawPowerupHUD();drawCoinCounter();drawComboHUD();drawNearMissFlash();}
   drawToast();
 
-  // Wait screen (menu)
+  // Home screen
   if(state==='wait'){
     if(menuImg.complete&&menuImg.naturalWidth>0){
       cx.drawImage(menuImg,0,0,W,H);
     } else {
       cx.fillStyle='#0a0a1a';cx.fillRect(0,0,W,H);
-      cx.save();cx.shadowColor='#0ea5e9';cx.shadowBlur=30;
-      cx.fillStyle='#0ea5e9';cx.font='bold 40px Arial';cx.textAlign='center';
-      cx.fillText('KAAN RACER 🏎️',W/2,H/2-40);cx.restore();
     }
-    // Paint over QUIT + coin counter from menu image
     cx.fillStyle='#1c2d4a';cx.fillRect(11,275,80,58);
     cx.fillStyle='#0e1624';cx.fillRect(284,34,54,36);
-    // Bottom bar
-    cx.save();cx.fillStyle='rgba(0,0,0,0.45)';cx.fillRect(0,H-64,W,64);
-    cx.fillStyle='#fbbf24';cx.font='bold 15px Arial';cx.textAlign='center';cx.textBaseline='middle';
-    cx.shadowColor='#f97316';cx.shadowBlur=10;
-    cx.fillText('BEST: '+hiScore+'  •  SPACE or tap to START',W/2,H-32);cx.restore();
+
+    // Dark overlay on bottom half for buttons
+    cx.fillStyle='rgba(0,0,0,0.65)';cx.fillRect(0,H-200,W,200);
+
+    // Top player banner
+    if(topPlayer.score>0){
+      cx.save();
+      cx.fillStyle='rgba(251,191,36,0.15)';cx.fillRect(0,H-205,W,30);
+      cx.fillStyle='#fbbf24';cx.font='bold 13px Arial';cx.textAlign='center';cx.textBaseline='middle';
+      cx.shadowColor='#f97316';cx.shadowBlur=8;
+      cx.fillText('👑 '+topPlayer.name+' — '+topPlayer.score.toLocaleString(),W/2,H-190);
+      cx.restore();
+    }
+
+    // Buttons
+    const btns=[
+      {label:'▶  START',    col:'#0ea5e9', y:H-162, w:200, action:'start'},
+      {label:'🏆 LEADERBOARD', col:'#fbbf24', y:H-110, w:200, action:'leaderboard'},
+      {label:'⚙️  SETTINGS', col:'#64748b', y:H-58,  w:200, action:'settings'},
+    ];
+    btns.forEach(b=>{
+      cx.save();
+      cx.fillStyle=b.col.replace(')',',0.2)').replace('rgb','rgba');
+      cx.beginPath();cx.roundRect(W/2-b.w/2,b.y,b.w,34,8);cx.fill();
+      cx.strokeStyle=b.col;cx.lineWidth=1.5;cx.beginPath();cx.roundRect(W/2-b.w/2,b.y,b.w,34,8);cx.stroke();
+      cx.fillStyle='#fff';cx.font='bold 15px Arial';cx.textAlign='center';cx.textBaseline='middle';
+      cx.shadowColor=b.col;cx.shadowBlur=8;
+      cx.fillText(b.label,W/2,b.y+17);
+      cx.restore();
+    });
   }
 
   // Dead screen
@@ -958,19 +1050,41 @@ function loop(){
   }
 }
 
-// Share button tap on dead screen
 cv.addEventListener('click',e=>{
+  const rect=cv.getBoundingClientRect();
+  const scaleX=W/rect.width,scaleY=H/rect.height;
+  const mx=(e.clientX-rect.left)*scaleX;
+  const my=(e.clientY-rect.top)*scaleY;
+
+  if(state==='wait'){
+    startBGM();
+    // START button
+    if(mx>W/2-100&&mx<W/2+100&&my>H-162&&my<H-128){startGame();return;}
+    // LEADERBOARD button
+    if(mx>W/2-100&&mx<W/2+100&&my>H-110&&my<H-76){fetchLeaderboard().then(()=>{state='leaderboard';});state='leaderboard';return;}
+    // SETTINGS button
+    if(mx>W/2-100&&mx<W/2+100&&my>H-58&&my<H-24){state='settings';return;}
+  }
   if(state==='dead'){
-    const rect=cv.getBoundingClientRect();
-    const scaleX=W/rect.width,scaleY=H/rect.height;
-    const mx=(e.clientX-rect.left)*scaleX;
-    const my=(e.clientY-rect.top)*scaleY;
-    // Share button area
     if(mx>W/2-60&&mx<W/2+60&&my>H-38&&my<H-14){shareScore();return;}
+    startBGM();startGame();return;
   }
   if(state==='nameinput'){submitScore();return;}
-  if(state==='leaderboard'){startGame();return;}
+  if(state==='leaderboard'){state='wait';return;}
   if(state==='achievements'){state='wait';return;}
+  if(state==='settings'){
+    // Daily toggle
+    if(mx>W/2-30&&mx<W/2+30&&my>115&&my<143){isDailyChallenge=!isDailyChallenge;return;}
+    // Skin tap
+    SKINS.forEach((skin,i)=>{
+      const xp=60+i*65, yp=235;
+      if(mx>xp-20&&mx<xp+20&&my>yp&&my<yp+40){
+        if(unlockedSkins.includes(i)){selectedSkin=i;}
+      }
+    });
+    // Back button
+    if(mx>W/2-60&&mx<W/2+60&&my>H-50&&my<H-20){state='wait';return;}
+  }
 });
 
 // Preload leaderboard on load
