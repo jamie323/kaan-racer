@@ -71,6 +71,7 @@ let obT = 0, coinT = 0, puT = 0;
 let keys = {};
 let voPlayed = false;
 let level = 1;
+let levelFrames = 0; // separate timer for level progression
 let levelBanner = '', levelBannerAlpha = 0, levelBannerTimer = 0;
 let invincible = 0;
 let newRecord = false;
@@ -599,7 +600,7 @@ function submitScore(){
 function startGame(){
   AC().resume();startBGM();preloadVoices();
   state='play';score=0;spd=4;fr=0;
-  lives=3;coinCount=0;level=1;invincible=0;newRecord=false;
+  lives=3;coinCount=0;level=1;levelFrames=0;invincible=0;newRecord=false;
   activeShield=0;activeTurbo=0;activeSlowmo=0;activeMagnet=0;
   combo=0;comboTimer=0;scoreMultiplier=1;nearMissFlash=0;nearMissCooldown=0;
   obstacles=[];parts=[];coins=[];powerups=[];exhaust=[];
@@ -640,7 +641,7 @@ function hitCoin(p,c){return Math.abs(p.x-c.x)<30&&Math.abs(p.y-c.y)<40;}
 function hitPU(p,pu){return Math.abs(p.x-pu.x)<32&&Math.abs(p.y-pu.y)<44;}
 
 function updateHUD(){
-  const mult=scoreMultiplier>1?` x${scoreMultiplier}`:'';
+  const mult=scoreMultiplier>1?' x'+Math.round(scoreMultiplier):'';
   document.getElementById('score-box').textContent='SCORE: '+score+mult;
   const hearts='❤️'.repeat(lives)+'🖤'.repeat(Math.max(0,3-lives));
   document.getElementById('lives-box').textContent=hearts;
@@ -673,7 +674,7 @@ function drawNearMissFlash(){
   cx.save();cx.globalAlpha=nearMissFlash/20*0.9;
   cx.fillStyle='#fbbf24';cx.font='bold 16px Arial';cx.textAlign='center';cx.textBaseline='middle';
   cx.shadowColor='#fbbf24';cx.shadowBlur=12;
-  cx.fillText('NEAR MISS! +'+50*scoreMultiplier,W/2,H/2-80);
+  cx.fillText('NEAR MISS! +'+Math.round(25*scoreMultiplier),W/2,H/2-80);
   cx.restore();
 }
 
@@ -879,11 +880,12 @@ function loop(){
   if(state==='settings'){drawSettings();return;}
 
   if(state==='play'){
-    const baseScoreInc = 1 + Math.floor(score/500)*0.3; // faster per level
-    const turboBoost = activeTurbo>0 ? 2.5 : 1;
-    score += Math.floor(baseScoreInc * turboBoost * scoreMultiplier) || 1;
+    // Score: 1pt/frame base. Turbo gives +1 bonus pt/frame. Simple, no compounding.
+    score += activeTurbo>0 ? 2 : 1;
     const slowFactor=activeSlowmo>0?0.5:1;
-    spd=Math.min(8,(4+Math.floor(score/500)*0.35))*(activeTurbo>0?1.6:1)*slowFactor;
+    // Speed: no cap — keeps climbing. Level determines speed tier.
+    const levelSpeedBonus = (level-1) * 0.4;
+    spd=(4+levelSpeedBonus)*(activeTurbo>0?1.6:1)*slowFactor;
 
     // Countdown powerups
     if(activeShield>0)activeShield--;
@@ -900,7 +902,7 @@ function loop(){
     else if(combo>0){combo=0;scoreMultiplier=1;}
 
     // Score multiplier from combo
-    scoreMultiplier=combo>=10?4:combo>=5?3:combo>=3?2:1;
+    scoreMultiplier=combo>=10?3:combo>=5?2:combo>=3?1.5:1; // max x3, for bonuses only
 
     // Level up
     const newLevel=Math.floor(score/500)+1;
@@ -908,7 +910,8 @@ function loop(){
       level=newLevel;levelBanner='LEVEL '+level+' 🔥';levelBannerAlpha=1;levelBannerTimer=90;
       playLevelUp();
       if(level>=2&&level<=5)announce('level'+level, true);
-      SKINS.forEach((s,i)=>{if(s.unlock>0&&score>=s.unlock&&!unlockedSkins.includes(i)){unlockedSkins.push(i);localStorage.setItem('kaanSkins',JSON.stringify(unlockedSkins));levelBanner='🔓 '+s.name+' UNLOCKED!';levelBannerAlpha=1;levelBannerTimer=120;}});
+      const levelUnlocks={1:1000,2:2000,3:3000,4:5000}; // level thresholds for skins
+      SKINS.forEach((s,i)=>{if(s.unlock>0&&level*500>=s.unlock&&!unlockedSkins.includes(i)){unlockedSkins.push(i);localStorage.setItem('kaanSkins',JSON.stringify(unlockedSkins));levelBanner='🔓 '+s.name+' UNLOCKED!';levelBannerAlpha=1;levelBannerTimer=120;}});
     }
     if(levelBannerTimer>0){levelBannerTimer--;if(levelBannerTimer<30)levelBannerAlpha=levelBannerTimer/30;}
 
@@ -953,7 +956,7 @@ function loop(){
     // Coin collect
     coins.forEach(c=>{
       if(!c.collected&&hitCoin(P,c)){
-        c.collected=true;score+=50*scoreMultiplier;coinCount++;coinBank++;
+        c.collected=true;score+=Math.round(50*scoreMultiplier);coinCount++;coinBank++;
         localStorage.setItem('kaanCoins',coinBank);
         coinPop(c.x,c.y);playCoinSound();
         if(coinCount>=5&&lives<3){lives=Math.min(3,lives+1);coinCount=0;updateHUD();playTone(880,0.3,0.5,'sine');levelBanner='❤️ EXTRA LIFE!';levelBannerAlpha=1;levelBannerTimer=80;}
@@ -984,7 +987,7 @@ function loop(){
           const nukeCount=obstacles.length;
           obstacles.forEach(o=>boom(o.x,o.y));
           obstacles=[];
-          score+=nukeCount*100*scoreMultiplier;
+          score+=nukeCount*100;
           announce('nuke',true);
         }
         playPowerup(pu.type);
@@ -1000,7 +1003,7 @@ function loop(){
         if(hit(P,o)&&!o.destroying){
           o.destroying=true;
           boom(o.x,o.y);playCrash();
-          score+=150*scoreMultiplier;
+          score+=100;
           if(navigator.vibrate)navigator.vibrate(20);
           setTimeout(()=>{obstacles=obstacles.filter(ob=>ob!==o);},0);
         }
